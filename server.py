@@ -76,6 +76,9 @@ class StepFunHTTPHandler(BaseHTTPRequestHandler):
                         "created": int(time.time()),
                         "owned_by": "stepfun",
                         "name": "Step 5 Preview (Studio Relay)",
+                        "context_length": 1000000,
+                        "max_input_tokens": 1000000,
+                        "max_output_tokens": 128000,
                     },
                     {
                         "id": "step-3.5-flash",
@@ -83,6 +86,9 @@ class StepFunHTTPHandler(BaseHTTPRequestHandler):
                         "created": int(time.time()),
                         "owned_by": "stepfun",
                         "name": "Step 3.5 Flash (Studio Relay)",
+                        "context_length": 256000,
+                        "max_input_tokens": 256000,
+                        "max_output_tokens": 65536,
                     },
                 ],
             }
