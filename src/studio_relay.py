@@ -147,19 +147,19 @@ class StepFunStudioRelay:
                 tool_calls = m.get("tool_calls")
                 if tool_calls:
                     calls_repr = ", ".join(f"{c.get('function', {}).get('name')}({c.get('function', {}).get('arguments')})" for c in tool_calls)
-                    conversation_history.append(f"Assistant [Dispatched Actions]: {calls_repr}")
+                    conversation_history.append(f"Assistant [Executed Actions]: {calls_repr}")
                 if content:
                     conversation_history.append(f"Assistant: {content}")
             elif role == "tool":
                 call_id = m.get("tool_call_id", "")
-                conversation_history.append(f"[Observation / Tool Result {call_id}]: {content}")
+                conversation_history.append(f"[Observation / Result for action {call_id}]:\n{content}\n(The action has completed. Now answer the user's request based on this result without re-dispatching.)")
 
         if len(conversation_history) > 1:
             full_content = (system_prompt + "\n".join(conversation_history)).strip()
         else:
             full_content = f"{system_prompt}User: {user_prompt}".strip() if system_prompt else user_prompt
 
-        conv_id = self.create_conversation()
+        conv_id = None
         payload = {
             "conversation_id": conv_id,
             "kind": "chat",
@@ -181,11 +181,21 @@ class StepFunStudioRelay:
             },
         }
 
-        r = self.session.post(STUDIO_STREAM_URL, headers=self.headers, json=payload, stream=True, timeout=60)
+        # Clean cookies to avoid stale CDN/WAF routing cookies
+        self.session.cookies.clear()
+        # Ensure Origin and Referer are set exactly
+        headers = dict(self.headers)
+        headers["Origin"] = "https://studio.stepfun.ai"
+        headers["Referer"] = "https://studio.stepfun.ai/"
+
+        r = requests.post(STUDIO_STREAM_URL, headers=headers, json=payload, stream=True, timeout=60)
         if r.status_code == 401:
             logger.info("Received HTTP 401, attempting auto-refresh of Oasis-Token...")
             if self.refresh_session_token():
-                r = self.session.post(STUDIO_STREAM_URL, headers=self.headers, json=payload, stream=True, timeout=60)
+                headers = dict(self.headers)
+                headers["Origin"] = "https://studio.stepfun.ai"
+                headers["Referer"] = "https://studio.stepfun.ai/"
+                r = requests.post(STUDIO_STREAM_URL, headers=headers, json=payload, stream=True, timeout=60)
 
         if r.status_code != 200:
             raise RuntimeError(f"Studio API error (HTTP {r.status_code}): {r.text[:300]}")
