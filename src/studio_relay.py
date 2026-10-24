@@ -29,6 +29,31 @@ class StepFunStudioRelay:
         if self.proxies:
             self.session.proxies.update(self.proxies)
 
+    def refresh_session_token(self) -> bool:
+        """Refreshes the Oasis-Token using Passport RefreshToken procedure."""
+        try:
+            url = "https://account.stepfun.ai/passport/proto.api.passport.v1.PassportService/RefreshToken"
+            headers = {
+                "Content-Type": "application/json",
+                "connect-protocol-version": "1",
+                "Oasis-appID": "20700",
+                "Oasis-Platform": "web",
+                "Oasis-Webid": self.oasis_webid,
+                "Cookie": f"Oasis-Token={self.oasis_token}",
+            }
+            r = self.session.post(url, headers=headers, json={}, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                acc = data.get("accessToken", {}).get("raw")
+                ref = data.get("refreshToken", {}).get("raw")
+                if acc and ref:
+                    self.oasis_token = f"{acc}...{ref}"
+                    logger.info("Session token refreshed successfully.")
+                    return True
+        except Exception as e:
+            logger.warning("Token refresh failed: %s", e)
+        return False
+
     @property
     def headers(self) -> Dict[str, str]:
         return {
@@ -110,6 +135,11 @@ class StepFunStudioRelay:
         }
 
         r = self.session.post(STUDIO_STREAM_URL, headers=self.headers, json=payload, stream=True, timeout=60)
+        if r.status_code == 401:
+            logger.info("Received HTTP 401, attempting auto-refresh of Oasis-Token...")
+            if self.refresh_session_token():
+                r = self.session.post(STUDIO_STREAM_URL, headers=self.headers, json=payload, stream=True, timeout=60)
+
         if r.status_code != 200:
             raise RuntimeError(f"Studio API error (HTTP {r.status_code}): {r.text[:300]}")
 
