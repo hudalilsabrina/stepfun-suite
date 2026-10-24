@@ -65,6 +65,44 @@ def save_key_record(record: dict) -> Path:
     return out_file
 
 
+def cmd_redeem(args: argparse.Namespace) -> None:
+    saved = BASE_DIR / "data" / "stepfun_keys.json"
+    if not saved.exists():
+        print(f"{R}Belum ada akun tersimpan di data/stepfun_keys.json. Jalankan 'auto' atau 'login' dulu.{X}")
+        sys.exit(1)
+
+    records = json.loads(saved.read_text())
+    if not records:
+        print(f"{R}Belum ada akun tersimpan.{X}")
+        sys.exit(1)
+
+    account = records[-1]
+    session = account.get("session", {})
+    access_token = session.get("access_token", "")
+    refresh_token = session.get("refresh_token", "")
+    device_id = session.get("device_id", "")
+    oasis_token = f"{access_token}...{refresh_token}" if access_token and refresh_token else ""
+
+    if not oasis_token or not device_id:
+        print(f"{R}Sesi browser Oasis-Token / Device-ID tidak lengkap di akun tersimpan.{X}")
+        sys.exit(1)
+
+    print(f"\n{C}Menukarkan voucher code '{args.code}' untuk akun {account.get('email', '-') }...{X}")
+    try:
+        res = StepFunClient.redeem_voucher(
+            code=args.code,
+            oasis_token=oasis_token,
+            oasis_webid=device_id,
+            region=args.region,
+            proxy=args.proxy,
+        )
+        print(f"{G}{B}✓ Voucher Berhasil Ditukarkan!{X}")
+        print(json.dumps(res, indent=2))
+    except Exception as e:
+        print(f"{R}{B}✗ Gagal menukarkan voucher:{X} {R}{e}{X}")
+        sys.exit(1)
+
+
 def cmd_auto(args: argparse.Namespace) -> None:
     print(f"\n{C}{'═' * 64}{X}")
     print(f" {B}{C}  🤖 STEPFUN AUTO-REGISTER & KEY HARVESTER (TEMPIK) 🤖{X}")
@@ -213,6 +251,12 @@ def main() -> None:
     p_auto.add_argument("--sync-router", action="store_true", default=True, help="Automatically inject API key into 9Router")
     p_auto.add_argument("--proxy", help="Optional proxy URL (http://user:pass@host:port)")
     p_auto.set_defaults(func=cmd_auto)
+
+    p_redeem = sub.add_parser("redeem", help="Redeem a promotional voucher code")
+    p_redeem.add_argument("--code", required=True, help="Promotional / gift voucher code")
+    p_redeem.add_argument("--region", default="oversea", choices=["oversea", "cn"])
+    p_redeem.add_argument("--proxy", help="Optional proxy URL")
+    p_redeem.set_defaults(func=cmd_redeem)
 
     # login command
     p_login = sub.add_parser("login", help="Start StepFun Outbound CLI OAuth Login flow")

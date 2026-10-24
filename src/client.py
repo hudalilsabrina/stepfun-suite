@@ -76,7 +76,7 @@ class StepFunClient:
         headers = {
             "Content-Type": "application/json",
             "connect-protocol-version": "1",
-            "oasis-appid": "20700",
+            "oasis-appid": "20700" if region == "oversea" else "10300",
             "oasis-platform": "web",
             "oasis-webid": oasis_webid,
             "Cookie": f"Oasis-Token={oasis_token}",
@@ -85,4 +85,31 @@ class StepFunClient:
         resp = requests.post(url, headers=headers, json={}, proxies=proxies, timeout=15)
         if resp.status_code != 200:
             raise RuntimeError(f"RateLimit query failed (HTTP {resp.status_code}): {resp.text}")
+        return resp.json()
+
+    @staticmethod
+    def redeem_voucher(
+        code: str,
+        oasis_token: str,
+        oasis_webid: str,
+        region: str = "oversea",
+        proxy: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Redeems a promotional / gift voucher code on StepFun DevCenter.
+        """
+        origin = "https://platform.stepfun.ai" if region == "oversea" else "https://platform.stepfun.com"
+        url = f"{origin}/api/step.openapi.devcenter.Dashboard/UseVoucherCode"
+        headers = {
+            "Content-Type": "application/json",
+            "connect-protocol-version": "1",
+            "oasis-appid": "20700" if region == "oversea" else "10300",
+            "oasis-platform": "web",
+            "oasis-webid": oasis_webid,
+            "Cookie": f"Oasis-Token={oasis_token}",
+        }
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        resp = requests.post(url, headers=headers, json={"code": code.strip()}, proxies=proxies, timeout=15)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Redeem failed (HTTP {resp.status_code}): {resp.text}")
         return resp.json()
