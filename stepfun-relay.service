@@ -1,0 +1,15 @@
+[Unit]
+Description=StepFun Studio AI Relay Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/stepfun-suite
+ExecStart=/root/qoder-suite/.venv/bin/python /root/stepfun-suite/server.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
