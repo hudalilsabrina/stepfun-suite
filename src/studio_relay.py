@@ -81,6 +81,54 @@ DEFAULT_HERMES_TOOLS = [
             "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}}, "required": ["pattern"]},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "skill_view",
+            "description": "Load a skill's full content or access its linked files (references, templates, scripts)",
+            "parameters": {"type": "object", "properties": {"name": {"type": "string", "description": "The skill name"}, "file_path": {"type": "string"}}, "required": ["name"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "skills_list",
+            "description": "List available skills (name + description)",
+            "parameters": {"type": "object", "properties": {"category": {"type": "string"}}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "skill_manage",
+            "description": "Create, update, or delete skills",
+            "parameters": {"type": "object", "properties": {"operations": {"type": "array"}}, "required": ["operations"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web using search queries",
+            "parameters": {"type": "object", "properties": {"queries": {"type": "array", "items": {"type": "string"}}}, "required": ["queries"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_extract",
+            "description": "Extract content from web page URLs",
+            "parameters": {"type": "object", "properties": {"urls": {"type": "array", "items": {"type": "string"}}}, "required": ["urls"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "vision_analyze",
+            "description": "Analyze an image or screenshot",
+            "parameters": {"type": "object", "properties": {"image_url": {"type": "string"}, "question": {"type": "string"}}, "required": ["image_url", "question"]},
+        },
+    },
 ]
 
 
