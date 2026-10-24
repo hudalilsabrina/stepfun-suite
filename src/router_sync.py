@@ -161,7 +161,7 @@ def submit_stepfun_key_to_9router(
         cur = conn.cursor()
         # Check if already present
         cur.execute(
-            "SELECT id, data FROM providerConnections WHERE provider = ? AND status = 'active'",
+            "SELECT id, data FROM providerConnections WHERE provider = ? AND isActive = 1",
             (STEPFUN_NODE_ID,),
         )
         rows = cur.fetchall()
@@ -177,8 +177,8 @@ def submit_stepfun_key_to_9router(
 
         new_id = str(uuid.uuid4())
         cur.execute(
-            """INSERT INTO providerConnections (id, provider, name, status, authType, data, createdAt, updatedAt)
-               VALUES (?, ?, ?, 'active', 'apikey', ?, ?, ?)""",
+            """INSERT INTO providerConnections (id, provider, name, isActive, authType, data, createdAt, updatedAt)
+               VALUES (?, ?, ?, 1, 'apikey', ?, ?, ?)""",
             (new_id, STEPFUN_NODE_ID, name, json.dumps(conn_data), now_iso, now_iso),
         )
         conn.commit()

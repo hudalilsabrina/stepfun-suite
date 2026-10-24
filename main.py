@@ -22,6 +22,7 @@ sys.path.insert(0, str(BASE_DIR))
 from src.oauth_login import start_cli_login, poll_cli_login, REGIONS
 from src.client import StepFunClient
 from src.router_sync import submit_stepfun_key_to_9router
+from src.auto_register import run_autonomous_registration
 
 # ANSI Color definitions
 G = "\033[92m"
@@ -62,6 +63,34 @@ def save_key_record(record: dict) -> Path:
     out_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
     os.chmod(out_file, 0o600)
     return out_file
+
+
+def cmd_auto(args: argparse.Namespace) -> None:
+    print(f"\n{C}{'═' * 64}{X}")
+    print(f" {B}{C}  🤖 STEPFUN AUTO-REGISTER & KEY HARVESTER (TEMPIK) 🤖{X}")
+    print(f"{C}{'═' * 64}{X}")
+    print(f"  {DIM}Region      :{X} {Y}{B}{args.region}{X}")
+    print(f"  {DIM}Auto 9Router:{X} {G}{args.sync_router}{X}")
+    print(f"{C}{'─' * 64}{X}\n")
+
+    try:
+        res = run_autonomous_registration(
+            region=args.region,
+            sync_router=args.sync_router,
+            proxy=args.proxy,
+            timeout_s=args.timeout,
+        )
+        api_key = res["api_key"]
+        print(f"\n{G}{B}✓ Akun & API Key Berhasil Dibuat Secara Penuh!{X}")
+        print(f"  {DIM}Email    :{X} {W}{res['email']}{X}")
+        print(f"  {DIM}UID      :{X} {W}{res.get('uid') or '-'}{X}")
+        print(f"  {DIM}API Key  :{X} {G}{api_key}{X}")
+        print(f"  {DIM}Endpoint :{X} {C}{res['api_base']}{X}")
+        if args.sync_router:
+            print(f"{G}{B}✓ Sudah disinkronkan ke 9Router (:20127) secara otomatis!{X}")
+    except Exception as e:
+        print(f"\n{R}{B}✗ Auto Registration Gagal:{X} {R}{e}{X}")
+        sys.exit(1)
 
 
 def cmd_login(args: argparse.Namespace) -> None:
@@ -176,6 +205,14 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    # subcommands
+    p_auto = sub.add_parser("auto", help="Autonomous registration via Tempik & TCaptcha solver")
+    p_auto.add_argument("--region", default="oversea", choices=["oversea", "cn"], help="Region (oversea: .ai, cn: .com)")
+    p_auto.add_argument("--timeout", type=int, default=300, help="Poll timeout in seconds")
+    p_auto.add_argument("--sync-router", action="store_true", default=True, help="Automatically inject API key into 9Router")
+    p_auto.add_argument("--proxy", help="Optional proxy URL (http://user:pass@host:port)")
+    p_auto.set_defaults(func=cmd_auto)
 
     # login command
     p_login = sub.add_parser("login", help="Start StepFun Outbound CLI OAuth Login flow")
