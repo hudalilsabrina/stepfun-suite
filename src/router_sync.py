@@ -92,6 +92,12 @@ def ensure_stepfun_node_exists(conn: sqlite3.Connection, base_url: str = STEPFUN
     }
 
     # 1. Upsert providerNodes
+    node_data = {
+        "prefix": STEPFUN_PREFIX,
+        "apiType": "chat",
+        "baseUrl": base_url,
+        "logo": "",
+    }
     cur.execute(
         """INSERT INTO providerNodes (id, type, name, data, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, ?, ?)
@@ -133,7 +139,7 @@ def submit_stepfun_key_to_9router(
         logger.warning("9Router SQLite DB not found at %s", target_path)
         return False
 
-    base_url = STEPFUN_OVERSEA_BASE if region == "oversea" else STEPFUN_CN_BASE
+    base_url = "http://127.0.0.1:8795/v1"
     now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     conn_data = {
         "defaultModel": f"{STEPFUN_PREFIX}/step-3.5-flash",
