@@ -116,6 +116,7 @@ class StepFunHTTPHandler(BaseHTTPRequestHandler):
                 return
 
             messages = body.get("messages", [])
+            tools = body.get("tools")
             model = body.get("model", "step-5-preview")
             # Strip prefixes if any
             if "/" in model:
@@ -137,6 +138,7 @@ class StepFunHTTPHandler(BaseHTTPRequestHandler):
 
                     stream_gen = relay.chat_completion(
                         messages=messages,
+                        tools=tools,
                         model=model,
                         temperature=temperature,
                         top_p=top_p,
@@ -145,11 +147,15 @@ class StepFunHTTPHandler(BaseHTTPRequestHandler):
                         stream=True,
                     )
                     for chunk in stream_gen:
-                        self.wfile.write(chunk.encode("utf-8"))
-                        self.wfile.flush()
+                        try:
+                            self.wfile.write(chunk.encode("utf-8"))
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            break
                 else:
                     res = relay.chat_completion(
                         messages=messages,
+                        tools=tools,
                         model=model,
                         temperature=temperature,
                         top_p=top_p,
