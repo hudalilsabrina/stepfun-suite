@@ -10,7 +10,6 @@ venv/
 
 # Secrets and local runtime state
 data/
-*.json
 *.env
 *.log
 keys.txt

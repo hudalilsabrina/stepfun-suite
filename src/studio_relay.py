@@ -12,9 +12,11 @@ import logging
 import time
 import uuid
 from typing import Any, Dict, Generator, List, Optional
+from pathlib import Path
 import requests
 
 logger = logging.getLogger("StepFunStudioRelay")
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 STUDIO_STREAM_URL = "https://studio.stepfun.ai/api/stdhttp/v1/studio/stream"
 STUDIO_CREATE_CONV_URL = "https://studio.stepfun.ai/api/step.openapi.devcenter.Dashboard/CreateConversation"
@@ -40,96 +42,16 @@ STRICT OPERATIONAL RULES:
 """
 
 
-DEFAULT_HERMES_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "terminal",
-            "description": "Execute shell commands on the OS",
-            "parameters": {"type": "object", "properties": {"command": {"type": "string", "description": "The command to run"}}, "required": ["command"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Read text file with line numbers and pagination",
-            "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "write_file",
-            "description": "Write content to a file, replacing existing content",
-            "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "patch",
-            "description": "Targeted find-and-replace edits in files",
-            "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "old_string": {"type": "string"}, "new_string": {"type": "string"}}, "required": ["path", "old_string", "new_string"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_files",
-            "description": "Search file contents or find files by name",
-            "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}}, "required": ["pattern"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "skill_view",
-            "description": "Load a skill's full content or access its linked files (references, templates, scripts)",
-            "parameters": {"type": "object", "properties": {"name": {"type": "string", "description": "The skill name"}, "file_path": {"type": "string"}}, "required": ["name"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "skills_list",
-            "description": "List available skills (name + description)",
-            "parameters": {"type": "object", "properties": {"category": {"type": "string"}}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "skill_manage",
-            "description": "Create, update, or delete skills",
-            "parameters": {"type": "object", "properties": {"operations": {"type": "array"}}, "required": ["operations"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "web_search",
-            "description": "Search the web using search queries",
-            "parameters": {"type": "object", "properties": {"queries": {"type": "array", "items": {"type": "string"}}}, "required": ["queries"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "web_extract",
-            "description": "Extract content from web page URLs",
-            "parameters": {"type": "object", "properties": {"urls": {"type": "array", "items": {"type": "string"}}}, "required": ["urls"]},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "vision_analyze",
-            "description": "Analyze an image or screenshot",
-            "parameters": {"type": "object", "properties": {"image_url": {"type": "string"}, "question": {"type": "string"}}, "required": ["image_url", "question"]},
-        },
-    },
-]
+def _load_default_tools() -> List[Dict[str, Any]]:
+    for loc in [BASE_DIR / "assets" / "all_hermes_tools.json", BASE_DIR / "data" / "all_hermes_tools.json"]:
+        if loc.exists():
+            try:
+                return json.loads(loc.read_text(encoding="utf-8"))
+            except Exception as e:
+                logger.warning("Failed to load %s: %s", loc, e)
+    return []
+
+DEFAULT_HERMES_TOOLS = _load_default_tools()
 
 
 def format_tool_descriptions(tools: List[Dict[str, Any]]) -> str:
