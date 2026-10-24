@@ -13,7 +13,7 @@ import logging
 import os
 import sys
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -44,7 +44,7 @@ def load_relays() -> list[StepFunStudioRelay]:
         dev = session.get("device_id")
         if acc and ref and dev:
             token = f"{acc}...{ref}"
-            relays.append(StepFunStudioRelay(oasis_token=token, oasis_webid=dev))
+            relays.append(StepFunStudioRelay(oasis_token=token, oasis_webid=dev, email=rec.get("email"), data_file=str(DATA_FILE)))
     return relays
 
 
@@ -122,6 +122,12 @@ class StepFunHTTPHandler(BaseHTTPRequestHandler):
             if "/" in model:
                 model = model.split("/")[-1]
 
+            # Model routing & fallbacks for Web Studio supported models
+            if model in ("step-3.5-flash", "step-3-flash", "step-3"):
+                model = "step-3.7-flash"
+            elif model not in ("step-5-preview", "step-3.7-flash"):
+                model = "step-5-preview"
+
             temperature = float(body.get("temperature", 1.0))
             top_p = float(body.get("top_p", 0.95))
             max_tokens = int(body.get("max_tokens", 4096))
@@ -183,7 +189,7 @@ def run_server(port: int = PORT):
     StepFunHTTPHandler.relays = load_relays()
     logger.info("Loaded %d active StepFun Studio session(s).", len(StepFunHTTPHandler.relays))
 
-    server = HTTPServer(("127.0.0.1", port), StepFunHTTPHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), StepFunHTTPHandler)
     logger.info("Server running at http://127.0.0.1:%d/v1", port)
     try:
         server.serve_forever()
