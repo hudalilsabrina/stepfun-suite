@@ -162,12 +162,18 @@ def run_autonomous_registration(
         page.wait_for_timeout(1000)
 
         logger.info("Filling email address: %s", email)
-        page.fill("input[type=email]", email)
-        page.wait_for_timeout(600)
+        email_el = page.wait_for_selector("input[type=email]", timeout=30000)
+        if email_el:
+            email_el.click()
+            email_el.fill(email)
+            page.keyboard.type(" ")
+            page.keyboard.press("Backspace")
+        page.wait_for_timeout(1000)
 
         logger.info("Triggering 'Get code' button...")
-        get_code_btn = page.get_by_text("Get code", exact=True)
-        get_code_btn.click()
+        get_code_btn = page.wait_for_selector("button:has-text('Get code'):not([disabled])", timeout=15000)
+        if get_code_btn:
+            get_code_btn.click()
         page.wait_for_timeout(2000)
 
         # Solve TCaptcha
