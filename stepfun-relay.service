@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/stepfun-suite
-ExecStart=/root/qoder-suite/.venv/bin/python /root/stepfun-suite/server.py
+ExecStart=/root/stepfun-suite/.venv/bin/python /root/stepfun-suite/server.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
