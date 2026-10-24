@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Secrets and local runtime state
+data/
+*.json
+*.env
+*.log
+keys.txt
+
+# Editor & OS
+.DS_Store
+.idea/
+.vscode/
