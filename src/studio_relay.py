@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 import uuid
@@ -37,10 +38,64 @@ Available tools:
 {tool_descriptions}
 
 RULES:
-1. When the request needs one of those tools, dispatch it with `file_write` instead of describing it.
-2. Do not claim the tools are unavailable; the bridge executes them.
+1. `file_write` is ONLY the transport for dispatch — never use it to write real files.
+   Its `content` MUST be exactly the JSON payload above, nothing else (no markdown fence, no prose).
+2. When the request needs one of those tools, dispatch it instead of describing it.
 3. After the observation arrives, answer the user using that result.
 """
+
+# Ambil objek JSON dari teks yang mungkin dibungkus ```json ... ``` atau prosa.
+_JSON_OBJ_RE = re.compile(r"\{.*\}", re.S)
+
+
+def parse_dispatch(progress_text: str) -> Optional[Dict[str, Any]]:
+    """Ambil {"tool": ..., "arguments": {...}} dari event tool_call Studio.
+
+    Model sering membungkus payload dengan cara berbeda-beda: JSON langsung,
+    JSON di dalam field `content`, string JSON di dalam `content`, atau JSON
+    yang dibungkus markdown fence. Kalau tidak ada payload dispatch valid,
+    kembalikan None supaya pemanggil meneruskan tool call apa adanya — jangan
+    sampai tool call hilang diam-diam (itu yang bikin agent loop mentok).
+    """
+    if not progress_text:
+        return None
+
+    candidates: List[Any] = []
+    try:
+        outer = json.loads(progress_text)
+    except Exception:
+        outer = None
+
+    if isinstance(outer, dict):
+        candidates.append(outer)
+        inner = outer.get("content")
+        if inner is None:
+            inner = outer.get("file_content") or outer.get("text")
+        if isinstance(inner, (str, dict)):
+            candidates.append(inner)
+    candidates.append(progress_text)
+
+    for cand in candidates:
+        if isinstance(cand, str):
+            m = _JSON_OBJ_RE.search(cand)
+            if not m:
+                continue
+            try:
+                cand = json.loads(m.group(0))
+            except Exception:
+                continue
+        if not isinstance(cand, dict):
+            continue
+        tool = cand.get("tool") or cand.get("name") or cand.get("tool_name")
+        args = cand.get("arguments", cand.get("args", {}))
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except Exception:
+                args = {}
+        if tool and isinstance(args, dict):
+            return {"name": str(tool), "arguments": args}
+    return None
 
 
 def _load_default_tools() -> List[Dict[str, Any]]:
@@ -284,12 +339,24 @@ class StepFunStudioRelay:
                 # Intercept file_write tool call for action dispatch
                 if evt_type == "tool_call_delta":
                     progress = data.get("progress_text", "")
-                    try:
-                        parsed = json.loads(progress)
-                        content_str = parsed.get("content", "")
-                        action = json.loads(content_str)
-                        tool_name = action.get("tool")
-                        tool_args = action.get("arguments", {})
+                    disp = parse_dispatch(progress)
+                    if disp is None:
+                        # Bukan payload dispatch (mis. model benar-benar menulis file).
+                        # Dulu blok ini `except: pass` sehingga tool call hilang dan
+                        # agent loop menggantung tanpa jejak. Sekarang diteruskan.
+                        try:
+                            passthrough = json.loads(progress)
+                            if not isinstance(passthrough, dict):
+                                passthrough = {"content": progress}
+                        except Exception:
+                            passthrough = {"content": progress}
+                        disp = {"name": data.get("tool_name") or "file_write",
+                                "arguments": passthrough}
+                        logger.warning("[relay] tool_call tanpa payload dispatch, diteruskan: %s",
+                                       str(progress)[:120])
+                    if disp is not None:
+                        tool_name = disp["name"]
+                        tool_args = disp["arguments"]
                         if tool_name and isinstance(tool_args, dict):
                             call_id = f"call_{uuid.uuid4().hex[:18]}"
                             tc = {
@@ -328,8 +395,6 @@ class StepFunStudioRelay:
                                 ],
                             }
                             yield f"data: {json.dumps(chunk)}\n\n"
-                    except Exception:
-                        pass
 
                 delta = {}
                 if evt_type == "reasoning_delta":
@@ -388,28 +453,36 @@ class StepFunStudioRelay:
 
                 if evt_type == "tool_call_delta":
                     progress = data.get("progress_text", "")
-                    try:
-                        parsed = json.loads(progress)
-                        content_str = parsed.get("content", "")
-                        action = json.loads(content_str)
-                        tool_name = action.get("tool")
-                        tool_args = action.get("arguments", {})
-                        if tool_name and isinstance(tool_args, dict):
-                            # Deduplicate calls with same tool and arguments
-                            call_sig = (tool_name, json.dumps(tool_args, sort_keys=True))
-                            if not any((c["function"]["name"], json.dumps(json.loads(c["function"]["arguments"]), sort_keys=True)) == call_sig for c in dispatched_tool_calls):
-                                dispatched_tool_calls.append(
-                                    {
-                                        "id": f"call_{uuid.uuid4().hex[:18]}",
-                                        "type": "function",
-                                        "function": {
-                                            "name": tool_name,
-                                            "arguments": json.dumps(tool_args),
-                                        },
-                                    }
-                                )
-                    except Exception:
-                        pass
+                    disp = parse_dispatch(progress)
+                    if disp is None:
+                        # Payload bukan dispatch (mis. file_write sungguhan):
+                        # teruskan apa adanya, jangan hilangkan tool call.
+                        try:
+                            passthrough = json.loads(progress)
+                            if not isinstance(passthrough, dict):
+                                passthrough = {"content": progress}
+                        except Exception:
+                            passthrough = {"content": progress}
+                        disp = {"name": data.get("tool_name") or "file_write",
+                                "arguments": passthrough}
+                        logger.warning("[relay] tool_call tanpa payload dispatch, diteruskan: %s",
+                                       str(progress)[:120])
+                    tool_name = disp["name"]
+                    tool_args = disp["arguments"]
+                    if tool_name and isinstance(tool_args, dict):
+                        # Deduplicate calls with same tool and arguments
+                        call_sig = (tool_name, json.dumps(tool_args, sort_keys=True))
+                        if not any((c["function"]["name"], json.dumps(json.loads(c["function"]["arguments"]), sort_keys=True)) == call_sig for c in dispatched_tool_calls):
+                            dispatched_tool_calls.append(
+                                {
+                                    "id": f"call_{uuid.uuid4().hex[:18]}",
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_name,
+                                        "arguments": json.dumps(tool_args),
+                                    },
+                                }
+                            )
                 elif evt_type == "reasoning_delta":
                     reasoning_pieces.append(data.get("delta", ""))
                 elif evt_type == "text_delta":
